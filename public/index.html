@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Chat</title>
+  </head>
+  <body>
+    <h1>Chat</h1>
+    <div id="chat"></div>
+    <form>
+      <input type="text" id="message" placeholder="Type your message">
+      <input type="text" id="sender" placeholder="sender">
+      <input type="text" id="recipientUsername" placeholder="Recipient username">
+      <button type="submit">Send</button>
+    </form>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.1.2/socket.io.js"></script>
+    <script>
+      const socket = io('http://localhost:3000/');
+      const chat = document.getElementById('chat');
+      const messageInput = document.getElementById('message');
+      const recipientUsernameInput = document.getElementById('recipientUsername');
+      const sender = document.getElementById('sender');
+      const form = document.querySelector('form');
+
+      sender.addEventListener('change', (evt)=>{
+        socket.emit('socket:auth', {username: evt.target.value});
+        getMessages();
+      });
+
+      recipientUsernameInput.addEventListener('change', (evt)=>{
+        getMessages();
+      })
+
+      form.addEventListener('submit', (event) => {
+        event.preventDefault();
+        const message = messageInput.value;
+        const recipientUsername = recipientUsernameInput.value;
+        const senderUsername = sender.value;
+        socket.emit('chat:message', { text: message, senderUsername: senderUsername, recipientUsername });
+        messageInput.value = '';
+        chat.innerHTML += `<p>${sender.value}: ${message}</p>`;
+        // recipientUsernameInput.value = '';
+      });
+
+      function getMessages(){
+        fetch(`http://localhost:3000/messages?su=${sender.value}&ru=${recipientUsernameInput.value}`).then(resp=>resp.json()).then(data=>{
+            chat.innerHTML = "";
+            data = data.reverse();
+            data.forEach(element => {
+                chat.innerHTML += `<p>${element.senderUsername}: ${element.text}</p>`;
+            });
+        })
+      }
+
+      socket.on('chat:message', (message) => {
+        console.log(message);
+        chat.innerHTML += `<p>${message.senderUsername}: ${message.text}</p>`;
+      });
+    </script>
+  </body>
+</html>
