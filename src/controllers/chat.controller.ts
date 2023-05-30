@@ -6,6 +6,7 @@ import { ChatMessage } from '../models/ChatMessage';
 import { User } from '../models/User';
 
 export class ChatController{
+    socketLists:any = {};
     constructor(private io: Server){
         this.init();
     }
@@ -13,16 +14,26 @@ export class ChatController{
     private async init(){
         this.io.on("connection", (socket: Socket)=>{
             console.log(`Client Connect ID:[${socket.id}]`);
+            this.socketLists[`${socket.id}`] = false;
 
             socket.on('chat:message', async(message: ChatMessage)=>{
-                const recipientUser = await User.findOne({where: {
-                    username: message.recipientUsername
-                }});
-                if(recipientUser){
-                    await ChatMessage.create({...message});
-                    this.io.to(recipientUser.socket_id).emit('chat:message', message);
-                }else{
-                    console.log(`User ${message.recipientUsername} not found!`);
+                if(this.socketLists[socket.id]){
+
+                    const recipientUser = await User.findOne({where: {
+                        username: message.recipientUsername
+                    }});
+                    const currentUser = await User.findOne({where: {
+                        username: message.senderUsername
+                    }});
+                    if(recipientUser && currentUser){
+                        await ChatMessage.create({...message});
+                        this.io.to(recipientUser.socket_id).emit('chat:message', message);
+                    }else{
+                        console.log(`User ${message.recipientUsername} not found!`);
+                    }
+                }
+                else{
+                    socket.emit("chat:message", "User not valid!");
                 }
 
             });
@@ -31,7 +42,9 @@ export class ChatController{
                 const user = await User.findOne({where: {username}});
                 if(!user){
                     console.log('user not valid!');
+                    socket.conn.close();
                 };
+                this.socketLists[socket.id] = true;
                 await user?.update({socket_id: socket.id});
             });
 
@@ -39,6 +52,7 @@ export class ChatController{
                 const user = await User.findOne({where: {socket_id: socket.id}});
                 user?.update({socket_id: null});
                 console.log(`Client [${socket.id}] disconnected`);
+                delete this.socketLists[socket.id];
             })
         });
     }
